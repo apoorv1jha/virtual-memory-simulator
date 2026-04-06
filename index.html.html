@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Virtual Memory Management Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Consolas','Courier New',monospace;background:#0f1117;color:#e2e8f0;min-height:100vh;padding:20px}
+h1{text-align:center;font-size:22px;font-weight:600;color:#7dd3fc;margin-bottom:6px;letter-spacing:.05em}
+.subtitle{text-align:center;font-size:13px;color:#64748b;margin-bottom:20px}
+.tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid #1e293b;padding-bottom:4px}
+.tab{padding:7px 16px;border:1px solid #1e293b;border-radius:6px 6px 0 0;font-size:13px;cursor:pointer;background:transparent;color:#64748b;font-family:inherit;transition:all .15s}
+.tab.active{background:#1e293b;color:#7dd3fc;border-color:#334155}
+.panel{background:#161b27;border:1px solid #1e293b;border-radius:10px;padding:16px 20px;margin-bottom:12px}
+.section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#475569;margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.stat-card{background:#0f1117;border:1px solid #1e293b;border-radius:8px;padding:12px 14px}
+.stat-label{font-size:11px;color:#475569;margin-bottom:4px}
+.stat-value{font-size:26px;font-weight:600;color:#e2e8f0}
+.stat-value.fault{color:#f87171}
+.stat-value.hit{color:#34d399}
+.controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.ctrl-group{display:flex;flex-direction:column;gap:5px}
+.ctrl-label{font-size:12px;color:#64748b}
+select,input[type=number]{width:100%;padding:7px 10px;border:1px solid #334155;border-radius:6px;background:#0f1117;color:#e2e8f0;font-size:13px;font-family:inherit}
+input[type=text]{flex:1;padding:7px 10px;border:1px solid #334155;border-radius:6px;background:#0f1117;color:#e2e8f0;font-size:13px;font-family:inherit}
+.ref-input{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.btn{padding:7px 16px;border:1px solid #334155;border-radius:6px;background:transparent;color:#e2e8f0;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn:hover{background:#1e293b}
+.btn.primary{border-color:#0ea5e9;color:#7dd3fc}
+.btn.primary:hover{background:#0c2036}
+.btn.danger{border-color:#ef4444;color:#f87171}
+.btn.danger:hover{background:#1c0a0a}
+.mem-grid{display:grid;gap:5px;margin-bottom:8px}
+.mem-frame{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #1e293b;border-radius:6px;font-size:13px;transition:all .2s}
+.frame-id{color:#475569;min-width:65px}
+.frame-page{font-weight:600;min-width:40px;color:#7dd3fc}
+.frame-empty{color:#334155}
+.frame-meta{font-size:11px;color:#475569;margin-left:auto}
+.frame-hit{background:#052e16 !important;border-color:#166534 !important}
+.frame-fault{background:#1c0a0a !important;border-color:#991b1b !important}
+.ref-table-wrap{overflow-x:auto;max-height:240px;overflow-y:auto}
+.ref-table{border-collapse:collapse;min-width:100%;font-size:12px}
+.ref-table th{text-align:left;padding:6px 10px;color:#475569;font-weight:600;border-bottom:1px solid #1e293b;position:sticky;top:0;background:#161b27}
+.ref-table td{padding:6px 10px;border-bottom:1px solid #0f1117}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-hit{background:#052e16;color:#34d399}
+.badge-fault{background:#1c0a0a;color:#f87171}
+.step-info{font-size:12px;color:#475569;margin-top:6px}
+.seg-table{width:100%;border-collapse:collapse;font-size:13px}
+.seg-table th{text-align:left;padding:8px 10px;font-size:11px;color:#475569;font-weight:600;border-bottom:1px solid #1e293b}
+.seg-table td{padding:8px 10px;border-bottom:1px solid #0f1117}
+.seg-bar-wrap{width:110px;background:#0f1117;border-radius:4px;height:8px;overflow:hidden;display:inline-block;vertical-align:middle}
+.seg-bar{height:8px;border-radius:4px}
+.frag-vis{display:flex;gap:2px;height:36px;border-radius:6px;overflow:hidden;margin-top:10px}
+.frag-block{height:100%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;transition:width .3s}
+.algo-compare{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.algo-card{background:#0f1117;border:1px solid #1e293b;border-radius:8px;padding:14px;text-align:center}
+.algo-card.best{border-color:#0ea5e9}
+.algo-name{font-size:12px;color:#475569;margin-bottom:8px}
+.algo-faults{font-size:32px;font-weight:600;color:#f87171}
+.algo-hits{font-size:13px;color:#34d399;margin-top:4px}
+.demand-queue{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.demand-chip{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid #1e293b;cursor:default}
+.demand-chip.loaded{background:#052e16;color:#34d399;border-color:#166534}
+.demand-chip.pending{background:#0f1117;color:#475569}
+.demand-chip.active{background:#0c2036;color:#7dd3fc;border-color:#0ea5e9}
+.legend-row{display:flex;gap:16px;margin-top:8px;font-size:11px;color:#475569}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+</style>
+</head>
+<body>
+<h1>Virtual Memory Management Simulator</h1>
+<div class="subtitle">CSE-316 · CA2 Project · Interactive Demonstration</div>
+
+<div class="tabs" id="mainTabs">
+  <button class="tab active" onclick="switchTab('paging')">paging</button>
+  <button class="tab" onclick="switchTab('segmentation')">segmentation</button>
+  <button class="tab" onclick="switchTab('compare')">algorithm compare</button>
+  <button class="tab" onclick="switchTab('demand')">demand paging</button>
+</div>
+
+<div id="tab-paging">
+  <div class="panel">
+    <div class="section-title">configuration</div>
+    <div class="controls">
+      <div class="ctrl-group"><span class="ctrl-label">frames in memory</span><input type="number" id="frameCount" value="3" min="1" max="8" onchange="reset()"></div>
+      <div class="ctrl-group"><span class="ctrl-label">replacement algorithm</span><select id="algorithm" onchange="reset()"><option value="lru">LRU</option><option value="optimal">Optimal</option><option value="fifo">FIFO</option></select></div>
+      <div class="ctrl-group"><span class="ctrl-label">page size</span><select id="pageSize"><option value="4">4 KB</option><option value="8">8 KB</option><option value="16">16 KB</option></select></div>
+    </div>
+    <div class="ref-input">
+      <input type="text" id="refString" placeholder="e.g. 1 2 3 4 1 2 5 1 2 3 4 5" value="1 2 3 4 1 2 5 1 2 3 4 5">
+      <button class="btn primary" onclick="runSimulation()">run</button>
+      <button class="btn" onclick="stepForward()">step</button>
+      <button class="btn danger" onclick="reset()">reset</button>
+    </div>
+    <div class="step-info" id="stepInfo"></div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">page faults</div><div class="stat-value fault" id="statFaults">0</div></div>
+    <div class="stat-card"><div class="stat-label">page hits</div><div class="stat-value hit" id="statHits">0</div></div>
+    <div class="stat-card"><div class="stat-label">fault rate</div><div class="stat-value" id="statRate">—</div></div>
+    <div class="stat-card"><div class="stat-label">references</div><div class="stat-value" id="statTotal">0</div></div>
+  </div>
+  <div class="panel"><div class="section-title">memory frames</div><div class="mem-grid" id="memFrames"></div></div>
+  <div class="panel">
+    <div class="section-title">reference trace</div>
+    <div class="ref-table-wrap"><table class="ref-table"><thead><tr><th>#</th><th>page</th><th>result</th><th>frames after</th><th>evicted</th></tr></thead><tbody id="traceBody"></tbody></table></div>
+  </div>
+</div>
+
+<div id="tab-segmentation" style="display:none">
+  <div class="panel">
+    <div class="section-title">segment table</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn primary" onclick="addSegment()">+ add segment</button>
+      <button class="btn" onclick="randomizeSegs()">randomize usage</button>
+      <button class="btn danger" onclick="initSegs()">reset</button>
+    </div>
+    <table class="seg-table"><thead><tr><th>seg #</th><th>name</th><th>base addr</th><th>limit (KB)</th><th>usage</th><th>type</th><th>internal frag</th></tr></thead><tbody id="segBody"></tbody></table>
+    <div class="section-title" style="margin-top:16px">memory map</div>
+    <div class="frag-vis" id="memMapVis"></div>
+    <div class="legend-row">
+      <span><span class="legend-dot" style="background:#38bdf8"></span>used</span>
+      <span><span class="legend-dot" style="background:#f97316"></span>fragmented</span>
+      <span><span class="legend-dot" style="background:#334155"></span>free</span>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">total memory</div><div class="stat-value" id="segTotal">—</div></div>
+    <div class="stat-card"><div class="stat-label">used</div><div class="stat-value hit" id="segUsed">—</div></div>
+    <div class="stat-card"><div class="stat-label">fragmented</div><div class="stat-value fault" id="segFrag">—</div></div>
+    <div class="stat-card"><div class="stat-label">segments</div><div class="stat-value" id="segCount">—</div></div>
+  </div>
+</div>
+
+<div id="tab-compare" style="display:none">
+  <div class="panel">
+    <div class="section-title">compare lru vs optimal vs fifo</div>
+    <div class="ref-input">
+      <input type="text" id="cmpRefString" value="1 2 3 4 1 2 5 1 2 3 4 5">
+      <input type="number" id="cmpFrames" value="3" min="1" max="8" style="width:80px">
+      <button class="btn primary" onclick="runCompare()">compare</button>
+    </div>
+  </div>
+  <div class="algo-compare" id="cmpResults">
+    <div class="algo-card"><div class="algo-name">LRU</div><div class="algo-faults">—</div><div class="algo-hits">— hits</div></div>
+    <div class="algo-card best"><div class="algo-name">Optimal ★</div><div class="algo-faults">—</div><div class="algo-hits">— hits</div></div>
+    <div class="algo-card"><div class="algo-name">FIFO</div><div class="algo-faults">—</div><div class="algo-hits">— hits</div></div>
+  </div>
+  <div class="panel"><div class="section-title">fault count by frame size (1–7 frames)</div><div style="position:relative;height:240px"><canvas id="cmpChart"></canvas></div></div>
+</div>
+
+<div id="tab-demand" style="display:none">
+  <div class="panel">
+    <div class="section-title">demand paging simulation</div>
+    <p style="font-size:13px;color:#475569;margin-bottom:12px">pages load only when accessed — simulating lazy loading with working set model.</p>
+    <div class="controls">
+      <div class="ctrl-group"><span class="ctrl-label">total pages in program</span><input type="number" id="dpTotalPages" value="10" min="4" max="20" onchange="initDemand()"></div>
+      <div class="ctrl-group"><span class="ctrl-label">physical frames</span><input type="number" id="dpFrames" value="4" min="2" max="10" onchange="initDemand()"></div>
+      <div class="ctrl-group"><span class="ctrl-label">working set window</span><input type="number" id="dpWindow" value="3" min="1" max="8" onchange="initDemand()"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn primary" onclick="dpStep()">access next page</button>
+      <button class="btn" onclick="dpAuto()" id="dpAutoBtn">auto run</button>
+      <button class="btn danger" onclick="initDemand()">reset</button>
+    </div>
+  </div>
+  <div class="panel"><div class="section-title">page status</div><div class="demand-queue" id="dpPages"></div><div class="legend-row"><span><span class="legend-dot" style="background:#38bdf8"></span>active</span><span><span class="legend-dot" style="background:#34d399"></span>in memory</span><span><span class="legend-dot" style="background:#475569"></span>on disk</span></div></div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">page faults</div><div class="stat-value fault" id="dpFaults">0</div></div>
+    <div class="stat-card"><div class="stat-label">accesses</div><div class="stat-value" id="dpAccesses">0</div></div>
+    <div class="stat-card"><div class="stat-label">in memory</div><div class="stat-value hit" id="dpInMem">0</div></div>
+    <div class="stat-card"><div class="stat-label">working set</div><div class="stat-value" id="dpWS">0</div></div>
+  </div>
+</div>
+
+<script>
+let simState={frames:[],history:[],step:0,refs:[],faults:0,hits:0};
+let segs=[];let dpState={};let cmpChartInst=null;let dpAutoTimer=null;
+
+function switchTab(t){
+  ['paging','segmentation','compare','demand'].forEach(x=>{document.getElementById('tab-'+x).style.display=x===t?'':'none';});
+  document.querySelectorAll('.tab').forEach((b,i)=>{b.classList.toggle('active',['paging','segmentation','compare','demand'][i]===t);});
+  if(t==='segmentation') renderSegs();
+  if(t==='demand') initDemand();
+}
+
+function getRefs(){return document.getElementById('refString').value.trim().split(/\s+/).map(Number).filter(n=>!isNaN(n)&&n>0);}
+function getFrameCount(){return parseInt(document.getElementById('frameCount').value)||3;}
+function getAlgo(){return document.getElementById('algorithm').value;}
+
+function runLRU(refs,nFrames){let frames=[],order=[],faults=0,hits=0,trace=[];refs.forEach((p,i)=>{let hit=frames.includes(p),evicted=null;if(hit){order.splice(order.indexOf(p),1);order.push(p);hits++;}else{faults++;if(frames.length<nFrames){frames.push(p);}else{evicted=order.shift();frames.splice(frames.indexOf(evicted),1);frames.push(p);}order.push(p);}trace.push({page:p,hit,evicted,frames:[...frames]});});return{faults,hits,trace};}
+function runFIFO(refs,nFrames){let frames=[],queue=[],faults=0,hits=0,trace=[];refs.forEach((p)=>{let hit=frames.includes(p),evicted=null;if(hit){hits++;}else{faults++;if(frames.length<nFrames){frames.push(p);queue.push(p);}else{evicted=queue.shift();frames.splice(frames.indexOf(evicted),1);frames.push(p);queue.push(p);}}trace.push({page:p,hit,evicted,frames:[...frames]});});return{faults,hits,trace};}
+function runOptimal(refs,nFrames){let frames=[],faults=0,hits=0,trace=[];refs.forEach((p,i)=>{let hit=frames.includes(p),evicted=null;if(hit){hits++;}else{faults++;if(frames.length<nFrames){frames.push(p);}else{let future=frames.map(f=>{let nx=refs.indexOf(f,i+1);return nx===-1?Infinity:nx;});let vi=future.indexOf(Math.max(...future));evicted=frames[vi];frames.splice(vi,1);frames.push(p);}}trace.push({page:p,hit,evicted,frames:[...frames]});});return{faults,hits,trace};}
+function runSim(refs,nf,algo){if(algo==='lru') return runLRU(refs,nf);if(algo==='optimal') return runOptimal(refs,nf);return runFIFO(refs,nf);}
+
+function reset(){simState={frames:[],history:[],step:0,refs:getRefs(),faults:0,hits:0};document.getElementById('statFaults').textContent='0';document.getElementById('statHits').textContent='0';document.getElementById('statRate').textContent='—';document.getElementById('statTotal').textContent='0';document.getElementById('traceBody').innerHTML='';document.getElementById('stepInfo').textContent='';renderFrames([],[],null);}
+
+function runSimulation(){let refs=getRefs(),nf=getFrameCount(),algo=getAlgo();let res=runSim(refs,nf,algo);simState={frames:res.trace[res.trace.length-1].frames,history:res.trace,step:res.trace.length,refs,faults:res.faults,hits:res.hits};updateStats(res.faults,res.hits,refs.length);renderTrace(res.trace,nf);renderFrames(res.trace[res.trace.length-1].frames,[],null,nf);document.getElementById('stepInfo').textContent='complete — '+refs.length+' references processed';}
+
+function stepForward(){if(simState.refs.length===0) simState.refs=getRefs();if(simState.step===0) simState.history=[];let refs=simState.refs,nf=getFrameCount(),algo=getAlgo();let full=runSim(refs,nf,algo);if(simState.step>=full.trace.length){document.getElementById('stepInfo').textContent='end of reference string';return;}let t=full.trace[simState.step];simState.step++;let faults=full.trace.slice(0,simState.step).filter(x=>!x.hit).length;let hits=simState.step-faults;updateStats(faults,hits,simState.step);renderTrace(full.trace.slice(0,simState.step),nf);renderFrames(t.frames,t.hit?[t.page]:[],t.evicted,nf);document.getElementById('stepInfo').textContent='step '+simState.step+'/'+refs.length+' — page '+t.page+(t.hit?' (hit)':' (fault)');}
+
+function updateStats(f,h,tot){document.getElementById('statFaults').textContent=f;document.getElementById('statHits').textContent=h;document.getElementById('statRate').textContent=tot>0?(f/tot*100).toFixed(1)+'%':'—';document.getElementById('statTotal').textContent=tot;}
+
+function renderFrames(frames,hitPages,evicted,nf){nf=nf||getFrameCount();let html='';for(let i=0;i<nf;i++){let pg=frames[i];let cls='mem-frame';if(pg!==undefined&&hitPages.includes(pg)) cls+=' frame-hit';else if(pg!==undefined&&!hitPages.length&&pg===frames[frames.length-1]) cls+=' frame-fault';html+=`<div class="${cls}"><span class="frame-id">frame ${i}</span>`;if(pg!==undefined) html+=`<span class="frame-page">P${pg}</span><span class="frame-meta">page ${pg}</span>`;else html+=`<span class="frame-empty">empty</span>`;html+=`</div>`;}document.getElementById('memFrames').innerHTML=html;}
+
+function renderTrace(trace,nf){nf=nf||getFrameCount();let html='';trace.forEach((t,i)=>{let badge=t.hit?'<span class="badge badge-hit">hit</span>':'<span class="badge badge-fault">fault</span>';let frames=t.frames.map(p=>'P'+p).join(', ');let ev=t.evicted?'P'+t.evicted:'—';html+=`<tr><td style="color:#475569">${i+1}</td><td>P${t.page}</td><td>${badge}</td><td style="font-size:11px">${frames}</td><td style="color:${t.evicted?'#f87171':'#334155'}">${ev}</td></tr>`;});document.getElementById('traceBody').innerHTML=html;}
+
+function initSegs(){segs=[{name:'code',base:0,limit:128,used:110,type:'text'},{name:'data',base:128,limit:64,used:48,type:'data'},{name:'stack',base:192,limit:32,used:20,type:'stack'},{name:'heap',base:224,limit:96,used:34,type:'heap'}];renderSegs();}
+function addSegment(){let names=['bss','rodata','shared','mmap'];let nm=names[segs.length%names.length];let last=segs[segs.length-1];let base=last?last.base+last.limit:0;segs.push({name:nm,base,limit:32,used:10,type:'data'});renderSegs();}
+function randomizeSegs(){segs.forEach(s=>{s.used=Math.floor(Math.random()*s.limit*0.9);});renderSegs();}
+
+function renderSegs(){let total=segs.reduce((a,s)=>a+s.limit,0);let used=segs.reduce((a,s)=>a+s.used,0);let frag=segs.reduce((a,s)=>a+(s.limit-s.used),0);document.getElementById('segTotal').textContent=total+'KB';document.getElementById('segUsed').textContent=used+'KB';document.getElementById('segFrag').textContent=frag+'KB';document.getElementById('segCount').textContent=segs.length;let colors={text:'#38bdf8',data:'#34d399',stack:'#facc15',heap:'#f97316'};let html='';segs.forEach((s,i)=>{let pct=s.limit>0?Math.round(s.used/s.limit*100):0;let fragKB=s.limit-s.used;html+=`<tr><td style="color:#475569">seg ${i}</td><td>${s.name}</td><td style="font-size:12px">0x${(s.base*1024).toString(16).padStart(6,'0')}</td><td>${s.limit} KB</td><td><div class="seg-bar-wrap"><div class="seg-bar" style="width:${pct}%;background:${colors[s.type]||'#38bdf8'}"></div></div> <span style="font-size:11px;color:#475569">${pct}%</span></td><td><span style="font-size:11px;background:#0f1117;padding:2px 6px;border-radius:4px;border:1px solid #1e293b">${s.type}</span></td><td style="font-size:12px;color:${fragKB>s.limit*0.3?'#f87171':'#475569'}">${fragKB} KB</td></tr>`;});document.getElementById('segBody').innerHTML=html;let visHtml='';segs.forEach(s=>{let w=total>0?Math.round(s.used/total*100):10;let fw=total>0?Math.round((s.limit-s.used)/total*100):2;let col=colors[s.type]||'#38bdf8';if(w>0) visHtml+=`<div class="frag-block" style="width:${w}%;background:${col};color:#0f1117">${s.name}</div>`;if(fw>0) visHtml+=`<div class="frag-block" style="width:${fw}%;background:#f97316;"></div>`;});let freeW=Math.max(0,100-Math.round(used/total*100));if(freeW>0) visHtml+=`<div class="frag-block" style="width:${freeW}%;background:#334155;"></div>`;document.getElementById('memMapVis').innerHTML=visHtml;}
+
+function runCompare(){let refs=document.getElementById('cmpRefString').value.trim().split(/\s+/).map(Number).filter(n=>!isNaN(n)&&n>0);let nf=parseInt(document.getElementById('cmpFrames').value)||3;let lru=runLRU(refs,nf);let opt=runOptimal(refs,nf);let fifo=runFIFO(refs,nf);document.getElementById('cmpResults').innerHTML=`<div class="algo-card"><div class="algo-name">LRU</div><div class="algo-faults">${lru.faults}</div><div class="algo-hits">${lru.hits} hits</div></div><div class="algo-card best"><div class="algo-name">Optimal ★</div><div class="algo-faults">${opt.faults}</div><div class="algo-hits">${opt.hits} hits</div></div><div class="algo-card"><div class="algo-name">FIFO</div><div class="algo-faults">${fifo.faults}</div><div class="algo-hits">${fifo.hits} hits</div></div>`;let labels=[],lD=[],oD=[],fD=[];for(let f=1;f<=7;f++){labels.push(f+' frames');lD.push(runLRU(refs,f).faults);oD.push(runOptimal(refs,f).faults);fD.push(runFIFO(refs,f).faults);}if(cmpChartInst) cmpChartInst.destroy();cmpChartInst=new Chart(document.getElementById('cmpChart'),{type:'line',data:{labels,datasets:[{label:'LRU',data:lD,borderColor:'#38bdf8',tension:.3,fill:false,pointRadius:4,pointBackgroundColor:'#38bdf8'},{label:'Optimal',data:oD,borderColor:'#34d399',tension:.3,fill:false,pointRadius:4,pointBackgroundColor:'#34d399'},{label:'FIFO',data:fD,borderColor:'#facc15',tension:.3,fill:false,pointRadius:4,pointBackgroundColor:'#facc15'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{color:'#94a3b8',boxWidth:12,font:{size:12}}}},scales:{y:{title:{display:true,text:'page faults',color:'#475569'},beginAtZero:true,grid:{color:'#1e293b'},ticks:{color:'#475569'}},x:{title:{display:true,text:'frame count',color:'#475569'},grid:{color:'#1e293b'},ticks:{color:'#475569'}}}}});}
+
+function initDemand(){if(dpAutoTimer){clearInterval(dpAutoTimer);dpAutoTimer=null;document.getElementById('dpAutoBtn').textContent='auto run';}let total=parseInt(document.getElementById('dpTotalPages').value)||10;let frames=parseInt(document.getElementById('dpFrames').value)||4;let ws=parseInt(document.getElementById('dpWindow').value)||3;let seq=[];for(let i=0;i<40;i++) seq.push(Math.floor(Math.random()*total));dpState={total,frames,ws,seq,step:0,inMem:[],faults:0,accesses:0};document.getElementById('dpFaults').textContent='0';document.getElementById('dpAccesses').textContent='0';document.getElementById('dpInMem').textContent='0';document.getElementById('dpWS').textContent='0';renderDemand(-1);}
+
+function dpStep(){if(dpState.step>=dpState.seq.length){dpState.seq=[...dpState.seq,...Array.from({length:10},()=>Math.floor(Math.random()*dpState.total))];}let p=dpState.seq[dpState.step];dpState.accesses++;if(!dpState.inMem.includes(p)){dpState.faults++;if(dpState.inMem.length>=dpState.frames) dpState.inMem.shift();dpState.inMem.push(p);}else{dpState.inMem.splice(dpState.inMem.indexOf(p),1);dpState.inMem.push(p);}dpState.step++;let wsStart=Math.max(0,dpState.step-dpState.ws);let ws=new Set(dpState.seq.slice(wsStart,dpState.step));document.getElementById('dpFaults').textContent=dpState.faults;document.getElementById('dpAccesses').textContent=dpState.accesses;document.getElementById('dpInMem').textContent=dpState.inMem.length;document.getElementById('dpWS').textContent=ws.size;renderDemand(p);}
+
+function dpAuto(){if(dpAutoTimer){clearInterval(dpAutoTimer);dpAutoTimer=null;document.getElementById('dpAutoBtn').textContent='auto run';return;}document.getElementById('dpAutoBtn').textContent='stop';dpAutoTimer=setInterval(()=>{dpStep();},450);}
+
+function renderDemand(active){let html='';for(let i=0;i<dpState.total;i++){let inMem=dpState.inMem.includes(i);let isActive=i===active;let cls='demand-chip'+(isActive?' active':inMem?' loaded':' pending');html+=`<span class="${cls}">P${i}</span>`;}document.getElementById('dpPages').innerHTML=html;}
+
+reset();initSegs();initDemand();
+</script>
+</body>
+</html>
